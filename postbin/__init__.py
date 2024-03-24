@@ -1,4 +1,4 @@
-## Note to editors and future/current contributors:  ##
+# Note to editors and future/current contributors:    #
 # this file is very messy.                            #
 # Any contributions to tidying it up would be greatly #
 # appriciated.                                        #
@@ -10,6 +10,7 @@ import typing
 
 try:
     import requests
+
     RR = requests.Response
 except ImportError:
     requests = None
@@ -17,23 +18,25 @@ except ImportError:
 
 try:
     import aiohttp
+
     CR = aiohttp.ClientResponse
 except ImportError:
     aiohttp = None
     CR = None
-import time
 import asyncio
+import time
 
 _FALLBACKS = [
-    "https://haste.clicksminuteper.net",
-    "https://paste.pythondiscord.com",
-    "https://haste.unbelievaboat.com",
-    "https://mystb.in",
-    "https://hastebin.com",
-    "https://hst.sh",
-    "https://hasteb.in"
+    "https://hst.sh",  # Still on /documents for now
+    "https://haste.unbelievaboat.com",  # Still on /documents for now
+    "https://ptero.co",  # Apparently pterodactyl has a hastebin
+    # "https://paste.pythondiscord.com", # System has been changed, good api but no longer works with postbin
+    # "https://mystb.in", # API is different or doesn't exist
+    # "https://hastebin.com", # Toptal bought it; locked behind API key
+    # "https://hasteb.in", # Defunct
+    # "https://haste.clicksminuteper.net" # Defunct
 ]
-#_HASTE_URLS_FOR_REGEX = '|'.join(_FALLBACKS[8:]).replace(".", "\\.")
+# _HASTE_URLS_FOR_REGEX = '|'.join(_FALLBACKS[8:]).replace(".", "\\.")
 # _HASTE_URLS_RAW = "(https://|http://)?({})/(raw/)?(?P<key>.+)".format(_HASTE_URLS_FOR_REGEX)
 # _HASTE_REGEX = re.compile(_HASTE_URLS_RAW)
 
@@ -42,15 +45,18 @@ _FALLBACKS = [
 
 class ResponseError(Exception):
     """Generic class raised when contacting the server failed."""
-    def __init__(self, response: typing.Union[RR,CR]):
+
+    def __init__(self, response: typing.Union[RR, CR]):
         self.raw_response = response
         if isinstance(response, requests.Response):
             self.status = response.status_code
         else:
             self.status = response.status
 
+
 class NoFallbacks(Exception):
     """Raised when no fallback could be contacted."""
+
 
 class NoMoreRetries(NoFallbacks):
     """Raised when we ran out of attempts to post."""
@@ -64,9 +70,9 @@ def findFallBackSync(verbose: bool = True):
         n = 0
         for n, url in enumerate(_FALLBACKS, 1):
             if verbose:
-                print(f"Trying service {n}/{len(_FALLBACKS)}",end="\r")
+                print(f"Trying service {n}/{len(_FALLBACKS)}", end="\r")
             try:
-                response = session.post(url+"/documents", data="")
+                response = session.post(url + "/documents", data="")
             except:
                 if verbose:
                     print(f"Service {n}/{len(_FALLBACKS)} failed. trying again.", end="\r")
@@ -83,6 +89,7 @@ def findFallBackSync(verbose: bool = True):
             raise NoFallbacks()
         return url
 
+
 async def findFallBackAsync(verbose: bool = True):
     """Same as findFallBackSync, but just async."""
     if not aiohttp:
@@ -90,9 +97,9 @@ async def findFallBackAsync(verbose: bool = True):
     async with aiohttp.ClientSession() as session:
         for n, url in enumerate(_FALLBACKS, 1):
             if verbose:
-                print(f"Trying service {n}/{len(_FALLBACKS)} (URL {url})",end="\r")
+                print(f"Trying service {n}/{len(_FALLBACKS)} (URL {url})", end="\r")
             try:
-                async with session.post(url+"/documents", data="") as response:
+                async with session.post(url + "/documents", data="") as response:
                     if response.status != 200:
                         continue
                     else:
@@ -132,8 +139,14 @@ def post(sync: bool = False, *, content: str, url: str = None, retry: int = 5, f
 
 
 # noinspection PyIncorrectDocstring
-def postSync(content:  str, *, url: str = None, retry: int = 5, find_fallback_on_unavailable: bool = True,
-             find_fallback_on_retry_runout: bool = False):
+def postSync(
+    content: str,
+    *,
+    url: str = None,
+    retry: int = 5,
+    find_fallback_on_unavailable: bool = True,
+    find_fallback_on_retry_runout: bool = False,
+):
     """
     Creates a new haste
 
@@ -150,10 +163,10 @@ def postSync(content:  str, *, url: str = None, retry: int = 5, find_fallback_on
         raise RuntimeError("requests must be installed if you want to be able to run postSync.")
     if not isinstance(content, str):
         content = repr(content)
-    url = url or "https://haste.clicksminuteper.net"
+    url = url or _FALLBACKS[0]
     with requests.Session() as session:
         try:
-            response = session.post(url+"/documents", data=content)
+            response = session.post(url + "/documents", data=content)
             if response.status_code == 503:
                 print(url, "is unavailable. Finding a fallback...")
                 return postSync(content, url=findFallBackSync(True), find_fallback_on_retry_runout=True)
@@ -176,30 +189,42 @@ def postSync(content:  str, *, url: str = None, retry: int = 5, find_fallback_on
             print(f"Error posting. {retry-1} retries left.")
             retry -= 1
             if find_fallback_on_unavailable:
-                return postSync(content, url=url, retry=retry, find_fallback_on_unavailable=True,
-                                find_fallback_on_retry_runout=True)
+                return postSync(
+                    content, url=url, retry=retry, find_fallback_on_unavailable=True, find_fallback_on_retry_runout=True
+                )
             raise TypeError("Unable to create a haste with the provided URL.")
-    return url+"/"+key
+    return url + "/" + key
 
-async def postAsync(content: str, *, url: str = None, retry: int = 5, find_fallback_on_unavailable: bool = True,
-                    find_fallback_on_retry_runout: bool = False):
+
+async def postAsync(
+    content: str,
+    *,
+    url: str = None,
+    retry: int = 5,
+    find_fallback_on_unavailable: bool = True,
+    find_fallback_on_retry_runout: bool = False,
+):
     """The same as :func:postSync, but async."""
     if not aiohttp:
         raise RuntimeError("aiohttp must be installed if you want to be able to run postAsync.")
     if not isinstance(content, str):
         content = repr(content)
-    url = url or "https://haste.clicksminuteper.net"
+    url = url or _FALLBACKS[0]
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.post(url+"/documents", data=content) as response:
+            async with session.post(url + "/documents", data=content) as response:
                 if response.status == 503:
                     print(url, "is unavailable. Finding a fallback...")
-                    return await postAsync(content, url=await findFallBackAsync(True), find_fallback_on_retry_runout=True)
+                    return await postAsync(
+                        content, url=await findFallBackAsync(True), find_fallback_on_retry_runout=True
+                    )
                 if response.status != 200:
                     raise ResponseError(response)
                 if response.headers.get("Content-Type", "").lower() != "application/json":
                     print(url, "is returning an invalid response. Finding a Fallback")
-                    return await postAsync(content, url=await findFallBackAsync(True), find_fallback_on_retry_runout=True)
+                    return await postAsync(
+                        content, url=await findFallBackAsync(True), find_fallback_on_retry_runout=True
+                    )
                 key = (await response.json())["key"]
                 return f"{url}/{key}"
         except aiohttp.ClientConnectionError:
@@ -212,13 +237,16 @@ async def postAsync(content: str, *, url: str = None, retry: int = 5, find_fallb
             if retry <= 0:
                 if find_fallback_on_retry_runout:
                     print(url, "is unavailable. Finding a fallback...")
-                    return await postAsync(content, url=await findFallBackAsync(True), find_fallback_on_retry_runout=True)
+                    return await postAsync(
+                        content, url=await findFallBackAsync(True), find_fallback_on_retry_runout=True
+                    )
                 raise NoMoreRetries()
             print(f"Error posting. {retry-1} retries left.")
             retry -= 1
             # return await postAsync(content, url=url, retry=retry, find_fallback_on_retry_runout=True)
             if find_fallback_on_unavailable:
-                return await postAsync(content, url=url, retry=retry, find_fallback_on_unavailable=True,
-                                find_fallback_on_retry_runout=True)
+                return await postAsync(
+                    content, url=url, retry=retry, find_fallback_on_unavailable=True, find_fallback_on_retry_runout=True
+                )
             raise TypeError("Unable to create a haste with the provided URL.")
-    return url+"/"+key
+    return url + "/" + key
